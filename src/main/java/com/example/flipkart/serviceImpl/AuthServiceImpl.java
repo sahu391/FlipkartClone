@@ -102,10 +102,9 @@ public class AuthServiceImpl implements AuthService {
 	}
 
 	public void deleteIfNotVerified() {
-		for(User user:userRepo.findAll()) {
-			if(Boolean.FALSE.equals(user.isEmailVerified())) {
-				userRepo.delete(user);
-			}
+		
+		for(User user:userRepo.findByIsEmailVerified(false)) {
+			userRepo.delete(user);
 		}
 		
 	}

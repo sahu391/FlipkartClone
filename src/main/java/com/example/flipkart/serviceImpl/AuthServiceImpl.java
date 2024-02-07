@@ -95,6 +95,7 @@ public class AuthServiceImpl implements AuthService {
 			structure.setMessage("User Registered Successfully");
 		    structure.setData(mapToUserResponse(user));
 		    
+		    
 			return new ResponseEntity<ResponseStructure<UserResponse>> (structure, HttpStatus.ACCEPTED);
 			
 			

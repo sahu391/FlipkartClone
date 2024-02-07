@@ -99,10 +99,18 @@ public class AuthServiceImpl implements AuthService {
 			return new ResponseEntity<ResponseStructure<UserResponse>> (structure, HttpStatus.ACCEPTED);
 			
 			
-		
-		
+	}
+
+	public void deleteIfNotVerified() {
+		for(User user:userRepo.findAll()) {
+			if(Boolean.FALSE.equals(user.isEmailVerified())) {
+				userRepo.delete(user);
+			}
+		}
 		
 	}
+	
+	
 
 	
 

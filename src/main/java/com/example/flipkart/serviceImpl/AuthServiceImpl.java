@@ -83,7 +83,7 @@ public class AuthServiceImpl implements AuthService {
 		User user=userRepo.findByUserName(userRequest.getEmail().split("@")[0])
 				          .map(u->{
 			if(u.isEmailVerified()) 
-				throw new RuntimeException("user already exists by specified by emailId");
+				throw new DuplicateEmailOrPassword("user already exists by specified by emailId");
 			else {
 				//send an email to user with an OTP
 			}
@@ -103,9 +103,11 @@ public class AuthServiceImpl implements AuthService {
 
 	public void deleteIfNotVerified() {
 		
-		for(User user:userRepo.findByIsEmailVerified(false)) {
-			userRepo.delete(user);
-		}
+//		for(User user:userRepo.findByIsEmailVerified(false)) {
+//			userRepo.delete(user);
+//		}
+		List<User> users =userRepo.findByIsEmailVerified(false);
+		userRepo.deleteAll(users);
 		
 	}
 	

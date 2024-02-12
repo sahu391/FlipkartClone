@@ -12,9 +12,11 @@ import org.springframework.security.config.annotation.authentication.configurati
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.config.Customizer;
 
 @Configuration
@@ -24,6 +26,22 @@ public class SecurityConfig {
 	
 	@Autowired
 	private CustomUserDetailsService userDetailsService;
+	
+	@Autowired
+	private JwtFilter filter;
+		
+	@Bean
+	SecurityFilterChain securityFilterChain (HttpSecurity http) throws Exception {
+		return http.csrf(csrf->csrf.disable())
+		.authorizeHttpRequests(auth-> auth.requestMatchers("/**").permitAll()
+		.anyRequest().authenticated())
+		.sessionManagement(management ->
+		      management.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+		.authenticationProvider(authenticationProvider())
+		.addFilterBefore(filter,UsernamePasswordAuthenticationFilter.class)
+		.build();
+		
+	}
 	
 	
 	@Bean
@@ -35,16 +53,7 @@ public class SecurityConfig {
 	AuthenticationManager authenticationManager (AuthenticationConfiguration configuration) throws Exception {
 		return configuration.getAuthenticationManager();
 	}
-		
-	@Bean
-	SecurityFilterChain securityFilterChain (HttpSecurity http) throws Exception {
-		return http.csrf(csrf->csrf.disable())
-		.authorizeHttpRequests(auth-> auth.requestMatchers("/**").permitAll()
-		.anyRequest().authenticated())
-		
-		.httpBasic(Customizer.withDefaults())
-		.build();
-	}
+	
 	
 	@Bean
 	AuthenticationProvider authenticationProvider () {

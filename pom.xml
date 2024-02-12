@@ -72,7 +72,16 @@
         <artifactId>jjwt-jackson</artifactId>
         <version>0.11.2</version> <!-- Make sure to use the same version as jjwt-api -->
     </dependency>
-		
+		 <dependency>
+        <groupId>io.jsonwebtoken</groupId>
+        <artifactId>jjwt-api</artifactId>
+        <version>0.11.2</version> <!-- Make sure to use the latest version -->
+    </dependency>
+    <dependency>
+        <groupId>io.jsonwebtoken</groupId>
+        <artifactId>jjwt-impl</artifactId>
+        <version>0.11.2</version> 
+	</dependency>	
 		
 		
 			

@@ -18,10 +18,12 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.example.flipkart.Exception.DuplicateEmailOrPassword;
+
 import com.example.flipkart.Exception.OtpInvalid;
 import com.example.flipkart.Exception.UnsuccessfulRegistration;
 import com.example.flipkart.Exception.UserNameNotFoundException;
@@ -227,10 +229,66 @@ public class AuthServiceImpl implements AuthService {
 		return ResponseEntity.ok("Logged out successfully");
 	}
 
+	
+	
+	@Override
+	public ResponseEntity<String> revokeAllDevices(String accessToken, String refreshToken,HttpServletResponse response) {
+		if(accessToken==null && refreshToken==null) throw new userNotLoggedInException("User is Not LoggedIn !!");
+		
+		String username = SecurityContextHolder.getContext().getAuthentication().getName();
+		if(username == null) throw new UserNameNotFoundException("username not found");
+		
+		return userRepo.findByUserName(username)
+		.map(user -> {
+			
+			blockAccessToken(accessTokenRepo.findByUserAndAccessTokenIsBlocked(user, false));
+			blockRefreshToken(refreshTokenRepo.findByUserAndRefreshTokenIsBlocked(user, false));
+			
+			response.addCookie(cookieManager.invalidate(new Cookie("at", "")));
+			response.addCookie(cookieManager.invalidate(new Cookie("rt", "")));
+			
+			return ResponseEntity.ok("Revoked from all devices successfully");
+		})
+		.orElseThrow(() -> new UserNameNotFoundException("username not found"));
+	}
+
+	
+
+	@Override
+	public ResponseEntity<String> revokeAllOtherDevices(String accessToken, String refreshToken,HttpServletResponse response) {
+		
+		if(accessToken==null && refreshToken==null) throw new userNotLoggedInException("User is Not LoggedIn !!");
+		
+		String username = SecurityContextHolder.getContext().getAuthentication().getName();
+		if(username == null) throw new UserNameNotFoundException("username not found");
+		
+		return userRepo.findByUserName(username)
+		.map(user -> {
+			blockAccessToken(accessTokenRepo.findByUserAndAccessTokenIsBlockedAndAccessTokenNot(user, false, accessToken));
+			blockRefreshToken(refreshTokenRepo.findByUserAndRefreshTokenIsBlockedAndRefreshTokenNot(user, false, refreshToken));
+			
+			return ResponseEntity.ok("Revoked from all other devices excluding the current one successfully");
+		})
+		.orElseThrow(() -> new UserNameNotFoundException("username not found"));
+	}
+
+
 //=====================================================================================================================================
 	
 	
-	
+	private void blockRefreshToken(List<RefreshToken> refreshTokens) {
+		refreshTokens.forEach(refreshToken -> {
+			refreshToken.setBlocked(true);
+			refreshTokenRepo.save(refreshToken);
+		});
+	}
+
+	private void blockAccessToken(List<AccessToken> accessTokens) {
+		accessTokens.forEach(accessToken -> {
+			accessToken.setBlocked(true);
+			accessTokenRepo.save(accessToken);
+		});
+	}
 	
 	private void grantAcess(HttpServletResponse response,User user) {
 		

@@ -1,11 +1,13 @@
 package com.example.flipkart.serviceImpl;
 
+import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.Random;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
@@ -13,36 +15,51 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMailMessage;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.example.flipkart.Exception.DuplicateEmailOrPassword;
 import com.example.flipkart.Exception.OtpInvalid;
 import com.example.flipkart.Exception.UnsuccessfulRegistration;
+import com.example.flipkart.Exception.UserNameNotFoundException;
+import com.example.flipkart.Exception.userNotLoggedInException;
 import com.example.flipkart.cache.CacheBeanConfig;
 import com.example.flipkart.cache.CacheStore;
+import com.example.flipkart.entity.AccessToken;
 import com.example.flipkart.entity.Customer;
+import com.example.flipkart.entity.RefreshToken;
 import com.example.flipkart.entity.Seller;
 import com.example.flipkart.entity.User;
 import com.example.flipkart.enums.UserRole;
+import com.example.flipkart.repository.AccessTokenRepo;
 import com.example.flipkart.repository.CustomerRepo;
+import com.example.flipkart.repository.RefreshTokenRepo;
 import com.example.flipkart.repository.SellerRepo;
 import com.example.flipkart.repository.UserRepo;
+import com.example.flipkart.requestDto.AuthRequest;
 import com.example.flipkart.requestDto.OtpModel;
 import com.example.flipkart.requestDto.UserRequest;
+import com.example.flipkart.responseDto.AuthResponse;
 import com.example.flipkart.responseDto.UserResponse;
+import com.example.flipkart.security.JwtService;
 import com.example.flipkart.service.AuthService;
+import com.example.flipkart.util.CookieManager;
 import com.example.flipkart.util.MessageStructure;
 import com.example.flipkart.util.ResponseStructure;
 
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
-@AllArgsConstructor
 public class AuthServiceImpl implements AuthService {
 	
 	
@@ -51,12 +68,59 @@ public class AuthServiceImpl implements AuthService {
 	private SellerRepo sellerRepo;
 	private UserRepo userRepo;
 	private ResponseStructure<UserResponse> structure;
+	private ResponseStructure<AuthResponse> authStructure;
 	private CacheStore<String> otpCacheStore;
 	private CacheStore<User> userCacheStore;
 	private JavaMailSender javaMailSender;
+	private AuthenticationManager authenticationManager;
+	private CookieManager cookieManager;
+	private JwtService jwtService;
+	private RefreshTokenRepo refreshTokenRepo;
+	private AccessTokenRepo accessTokenRepo;
+	
+	@Value("${myapp.access.expiry}")
+	private int accessExpiryInSeconds;
+	@Value("${myapp.refresh.expiry}")
+	private int refreshExpiryInSeconds;
 	
 	
 	
+
+
+
+	public AuthServiceImpl(PasswordEncoder passwordEncoder,
+			CustomerRepo customerRepo, 
+			SellerRepo sellerRepo,
+			UserRepo userRepo, 
+			ResponseStructure<UserResponse> structure, 
+			ResponseStructure<AuthResponse> authStructure,
+			CacheStore<String> otpCacheStore, 
+			CacheStore<User> userCacheStore, 
+			JavaMailSender javaMailSender,
+			AuthenticationManager authenticationManager, 
+			CookieManager cookieManager, 
+			JwtService jwtService,
+			RefreshTokenRepo refreshTokenRepo, 
+			AccessTokenRepo accessTokenRepo) {
+		super();
+		this.passwordEncoder = passwordEncoder;
+		this.customerRepo = customerRepo;
+		this.sellerRepo = sellerRepo;
+		this.userRepo = userRepo;
+		this.structure = structure;
+		this.authStructure = authStructure;
+		this.otpCacheStore = otpCacheStore;
+		this.userCacheStore = userCacheStore;
+		this.javaMailSender = javaMailSender;
+		this.authenticationManager = authenticationManager;
+		this.cookieManager = cookieManager;
+		this.jwtService = jwtService;
+		this.refreshTokenRepo = refreshTokenRepo;
+		this.accessTokenRepo = accessTokenRepo;
+	}
+
+
+
 	@Override
 	public ResponseEntity<ResponseStructure<UserResponse>> userRegister(UserRequest userRequest) {
 		if(userRepo.existsByEmail(userRequest.getEmail()))
@@ -114,6 +178,89 @@ public class AuthServiceImpl implements AuthService {
 		
 	}
 	
+	
+	@Override
+	public ResponseEntity<ResponseStructure<AuthResponse>> userLogin(AuthRequest request,HttpServletResponse response) {
+		String username = request.getEmail().split("@")[0];
+		String password=request.getPassword();
+		
+		UsernamePasswordAuthenticationToken token = new UsernamePasswordAuthenticationToken(username, password);
+		Authentication authentication = authenticationManager.authenticate(token);
+		if(!authentication.isAuthenticated())
+			throw new UserNameNotFoundException("Failed to authenticate the user");
+		else 
+			return userRepo.findByUserName(username).map(user->{
+			grantAcess(response, user);
+			return ResponseEntity.ok(authStructure.setStatus(HttpStatus.OK.value())
+					.setData(AuthResponse.builder()
+							.userId(user.getUserId())
+							.userName(username)
+							.role(user.getUserRole().name())
+							.isAuthenticated(true)
+							.accessExpirationInSeconds(LocalDateTime.now().plusSeconds(accessExpiryInSeconds))
+							.refreshExpirationInSeconds(LocalDateTime.now().plusSeconds(refreshExpiryInSeconds))
+							.build())
+					.setMessage("Login successful"));
+			}).get();
+		
+	}
+
+	
+	
+	@Override
+	public ResponseEntity<String> userLogout(String refreshToken, String accessToken, HttpServletResponse response) {
+		if(accessToken==null && refreshToken ==null) throw new userNotLoggedInException("The user needs to login !");
+		
+		accessTokenRepo.findByToken(accessToken).ifPresent(accesstoken->{
+			accesstoken.setBlocked(true);
+			accessTokenRepo.save(accesstoken);
+		});
+		
+		refreshTokenRepo.findByToken(refreshToken).ifPresent(refreshtoken->{
+			refreshtoken.setBlocked(true);
+			refreshTokenRepo.save(refreshtoken);
+		});
+		
+		response.addCookie(cookieManager.invalidate(new Cookie("acessToken", "")));
+		response.addCookie(cookieManager.invalidate(new Cookie("refreshToken", "")));
+		
+		return ResponseEntity.ok("Logged out successfully");
+	}
+
+//=====================================================================================================================================
+	
+	
+	
+	
+	private void grantAcess(HttpServletResponse response,User user) {
+		
+		//generating access and refresh tokens 
+		String accessToken = jwtService.generateAccessToken(user.getUserName());
+		String refreshToken = jwtService.generateRefreshToken(user.getUserName());
+		
+		//adding access and refresh token cookie to the response
+		response.addCookie(cookieManager.configure(new Cookie("at", accessToken),accessExpiryInSeconds));
+		response.addCookie(cookieManager.configure(new Cookie("rt", refreshToken),refreshExpiryInSeconds));
+		
+		//saving the access and response cookie into the database
+		accessTokenRepo.save(AccessToken.builder()
+				.user(user)
+				.token(accessToken)
+				.isBlocked(false)
+				.expiration(LocalDateTime.now().plusSeconds(accessExpiryInSeconds))
+				.build());
+		
+		refreshTokenRepo.save(RefreshToken.builder()
+				.user(user)
+				.token(refreshToken)
+				.isBlocked(false)
+				.expiration(LocalDateTime.now().plusSeconds(accessExpiryInSeconds))
+				.build());
+	}
+	
+	
+	
+	
 	private <T extends User>T mapToUser(UserRequest userRequest) {
 		User user=null;
 		switch(userRequest.getUserRole()){
@@ -132,6 +279,8 @@ public class AuthServiceImpl implements AuthService {
 		
 	}
 	
+	
+	
 	private  UserResponse mapToUserResponse(User user) {
 		return  UserResponse.builder()
 				.userId(user.getUserId())
@@ -141,6 +290,8 @@ public class AuthServiceImpl implements AuthService {
 				.build();
 				
 	}
+	
+	
 
 	private <T extends User>T saveUser(UserRequest userRequest) {
 			
@@ -153,6 +304,8 @@ public class AuthServiceImpl implements AuthService {
 			}
 		return (T)user;	
 	}
+	
+	
 	
 	
 	private String generateOtp() {
@@ -175,6 +328,8 @@ public class AuthServiceImpl implements AuthService {
 				+"Flipkart"
 			).build());
 	}
+	
+	
 	
 	private void confirmationMailOfRegistration(User user) throws MessagingException {
 		sendMail(MessageStructure.builder()
@@ -204,6 +359,7 @@ public class AuthServiceImpl implements AuthService {
 		
 		
 	}
+	
 
 	
 	public void deleteIfNotVerified() {
@@ -212,6 +368,21 @@ public class AuthServiceImpl implements AuthService {
 		userRepo.deleteAll(users);
 		
 	}
+
+	
+
+	
+
+
+	
+
+
+
+	
+
+
+
+	
 
 
 	

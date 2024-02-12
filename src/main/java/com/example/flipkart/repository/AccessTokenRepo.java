@@ -13,5 +13,6 @@ public interface AccessTokenRepo extends JpaRepository<AccessToken, Long>{
 		
 	Optional<AccessToken> findByToken(String token);
 	List<AccessToken> findAllByExpirationBeforeAndIsBlocked (LocalDateTime expiration,boolean isBlocked);
+	Optional<AccessToken> findByTokenAndIsBlocked(String at,boolean b);
 	
 }

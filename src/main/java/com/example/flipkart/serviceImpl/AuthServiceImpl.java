@@ -241,8 +241,8 @@ public class AuthServiceImpl implements AuthService {
 		return userRepo.findByUserName(username)
 		.map(user -> {
 			
-			blockAccessToken(accessTokenRepo.findByUserAndAccessTokenIsBlocked(user, false));
-			blockRefreshToken(refreshTokenRepo.findByUserAndRefreshTokenIsBlocked(user, false));
+			blockAccessToken(accessTokenRepo.findByUserAndIsBlocked(user, false));
+			blockRefreshToken(refreshTokenRepo.findByUserAndIsBlocked(user, false));
 			
 			response.addCookie(cookieManager.invalidate(new Cookie("at", "")));
 			response.addCookie(cookieManager.invalidate(new Cookie("rt", "")));
@@ -264,8 +264,8 @@ public class AuthServiceImpl implements AuthService {
 		
 		return userRepo.findByUserName(username)
 		.map(user -> {
-			blockAccessToken(accessTokenRepo.findByUserAndAccessTokenIsBlockedAndAccessTokenNot(user, false, accessToken));
-			blockRefreshToken(refreshTokenRepo.findByUserAndRefreshTokenIsBlockedAndRefreshTokenNot(user, false, refreshToken));
+			blockAccessToken(accessTokenRepo.findByUserAndIsBlockedAndTokenNot(user, false, accessToken));
+			blockRefreshToken(refreshTokenRepo.findByUserAndIsBlockedAndTokenNot(user, false, refreshToken));
 			
 			return ResponseEntity.ok("Revoked from all other devices excluding the current one successfully");
 		})

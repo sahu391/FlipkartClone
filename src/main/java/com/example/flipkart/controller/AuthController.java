@@ -54,14 +54,14 @@ public class AuthController {
 	
 	
 	@PreAuthorize("hasAuthority('CUSTOMER') OR hasAuthority('SELLER')")
-	@PutMapping("/revoke-all-devices")
+	@PutMapping("/revoke-all")
 	public ResponseEntity<String> revokeAllDevices(@CookieValue(name = "at", required = false) String accessToken,
 			@CookieValue(name = "rt", required = false) String refreshToken,HttpServletResponse response){
 		return authService.revokeAllDevices(accessToken, refreshToken,response);
 	}
 
 	@PreAuthorize("hasAuthority('CUSTOMER') OR hasAuthority('SELLER')")
-	@PutMapping("/revoke-others-devices")
+	@PutMapping("/revoke-other")
 	public ResponseEntity<String> revokeAllOtherDevices(@CookieValue(name = "at", required = false) String accessToken,
 			@CookieValue(name = "rt", required = false) String refreshToken,HttpServletResponse response){
 		return authService.revokeAllOtherDevices(accessToken, refreshToken,response);

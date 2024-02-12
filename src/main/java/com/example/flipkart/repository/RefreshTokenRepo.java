@@ -12,6 +12,6 @@ import com.example.flipkart.entity.RefreshToken;
 public interface RefreshTokenRepo extends JpaRepository<RefreshToken, Long>{
 	
 	Optional<RefreshToken> findByToken(String token);
-	
+	List<RefreshToken> findAllByExpirationBeforeAndIsBlocked (LocalDateTime expiration,boolean isBlocked);
 	
 }

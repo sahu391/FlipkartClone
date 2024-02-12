@@ -37,7 +37,7 @@ public class JwtService {
 	}
 	
 	private String generateJWT(Map<String,Object> claims,String username,long expiry) {
-		return Jwts.builder()
+		return Jwt.builder()
 				.setClaims(claims)
 				.setSubject(username)
 				.setIssuedAt(new Date(System.currentTimeMillis()))
